@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -15,6 +16,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { MediaService } from './media.service';
+
+const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -34,7 +38,18 @@ export class MediaController {
   }
 
   @Post('articles/:articleId')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_UPLOAD_BYTES },
+      fileFilter: (req, file, cb) => {
+        if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+          cb(new BadRequestException(`Unsupported file type "${file.mimetype}" — only JPEG, PNG, WEBP, or GIF images are allowed`), false);
+          return;
+        }
+        cb(null, true);
+      },
+    }),
+  )
   upload(
     @Param('articleId', ParseUUIDPipe) articleId: string,
     @UploadedFile() file: Express.Multer.File,

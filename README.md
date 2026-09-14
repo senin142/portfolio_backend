@@ -26,7 +26,9 @@ codebase.
   caller. All articles share a single 150MB cap (`STORAGE_CAP_BYTES` in `media.service.ts`) —
   every upload runs an eviction pass afterward that deletes the oldest images first until usage
   is back under the cap, so one big unresized upload can't silently starve the rest of the demo.
-  `GET /media/usage` exposes current usage for the dashboard's storage bar.
+  `GET /media/usage` exposes current usage for the dashboard's storage bar. Uploads are capped at
+  10MB and restricted to JPEG/PNG/WEBP/GIF by MIME type — both checks return a clean 4xx rather
+  than crashing or letting an arbitrary file get stored as if it were an image.
 - Swagger/OpenAPI docs.
 
 ## Architecture
