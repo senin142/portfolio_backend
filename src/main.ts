@@ -1,3 +1,7 @@
+// Must run before any other import — @WebSocketGateway()'s cors option is evaluated
+// as a decorator at module-load time, before ConfigModule.forRoot() would otherwise
+// populate process.env, so realtime.gateway.ts needs it already loaded by then.
+import 'dotenv/config';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';

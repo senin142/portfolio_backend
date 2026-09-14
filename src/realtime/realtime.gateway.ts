@@ -13,7 +13,7 @@ export interface ArticlePublishedPayload {
 // A dedicated real-time channel, separate from the REST API surface — the REST
 // controllers never talk to Socket.IO directly, they just emit a domain event.
 @Injectable()
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({ cors: { origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000', credentials: true } })
 export class RealtimeGateway {
   @WebSocketServer()
   private server: Server;
