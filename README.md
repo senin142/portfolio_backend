@@ -82,9 +82,12 @@ Point the [frontend](https://github.com/senin142/portfolio_frontend) at this API
   thing that let the storage-quota logic be verified directly against real row sizes for this demo.
   A real deployment would move the bytes to object storage and keep only a pointer + size in
   Postgres, since a database is a poor place to keep growing binary blobs long-term.
-- The Supabase DB credential in use is the full `postgres` superuser role, not a role scoped to
-  just this app's tables — fine for a local-only demo, but a real deployment would create a
-  least-privilege role first.
+- ~~The Supabase DB credential in use is the full `postgres` superuser role~~ — fixed: the app now
+  connects as a dedicated `cms_app` role (migration `20260101000010-scoped-app-role.js`) with
+  only `SELECT/INSERT/UPDATE/DELETE` on this app's 4 tables via RLS policies, nothing else. The
+  `postgres` superuser credential still exists (needed to re-run that one migration if the role
+  ever needs recreating) but the running app never uses it — kept in `.env` as
+  `DB_SUPERUSER_USERNAME`/`DB_SUPERUSER_PASSWORD`, separate from `DB_USERNAME`/`DB_PASSWORD`.
 - Ran a red-team pass (2026-09-14): confirmed no SQL injection (Sequelize params), no password-hash
   leakage through this app's own API, no stack-trace leakage, RBAC boundaries hold, and fixed the
   gaps found:
