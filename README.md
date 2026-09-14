@@ -86,8 +86,22 @@ Point the [frontend](https://github.com/senin142/portfolio_frontend) at this API
   just this app's tables — fine for a local-only demo, but a real deployment would create a
   least-privilege role first.
 - Ran a red-team pass (2026-09-14): confirmed no SQL injection (Sequelize params), no password-hash
-  leakage, no stack-trace leakage, RBAC boundaries hold, and fixed the two real gaps found —
-  brute-force login (now rate-limited via `@nestjs/throttler`, 5/min on `/auth/*`) and wildcard
-  Socket.IO CORS (now scoped to `FRONTEND_ORIGIN`). `npm audit` still shows ~21 findings in
-  transitive/build-time deps (worth a periodic re-check, particularly multer given it handles
-  untrusted uploads) — none currently exploitable at runtime through this app's own code paths.
+  leakage through this app's own API, no stack-trace leakage, RBAC boundaries hold, and fixed the
+  gaps found:
+  - Brute-force login (now rate-limited via `@nestjs/throttler`, 5/min on `/auth/*`).
+  - Wildcard Socket.IO CORS (now scoped to `FRONTEND_ORIGIN`).
+  - **Critical**: Supabase's auto-generated PostgREST API was serving the full `users` table —
+    including bcrypt password hashes — to anyone with the public "publishable" key, completely
+    bypassing this app's own auth. Root cause: tables were created via raw Sequelize migrations
+    against the `postgres` superuser rather than through Supabase's normal onboarding, which
+    nudges you toward enabling Row Level Security — RLS was simply never turned on. Fixed by
+    running `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on all 5 tables with zero policies
+    (default-deny for the `anon`/`authenticated` roles PostgREST uses; this app's own connection,
+    as the `postgres` superuser, bypasses RLS entirely and is unaffected). Verified: the REST API
+    now returns `[]` for both `users` and `articles`; this app's endpoints work unchanged. Only
+    seed/demo data (no real users) was ever exposed. **If any new table is ever added directly
+    via migration, remember to enable RLS on it too** — it does not happen automatically outside
+    Supabase's own table-creation UI.
+  - `npm audit` still shows ~21 findings in transitive/build-time deps (worth a periodic re-check,
+    particularly multer given it handles untrusted uploads) — none currently exploitable at
+    runtime through this app's own code paths.
