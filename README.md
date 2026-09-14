@@ -77,10 +77,17 @@ Point the [frontend](https://github.com/senin142/portfolio_frontend) at this API
 ## Notes / things I'd change for production
 
 - No refresh-token flow — tokens simply expire (`JWT_EXPIRES_IN`) and the user re-logs in.
-- No rate limiting or audit logging on auth endpoints.
-- The Socket.IO gateway allows CORS from any origin (`*`) — fine for a public read-only broadcast
-  of already-public article metadata, would be scoped down for anything sensitive.
+- No audit logging on auth endpoints.
 - Images are stored as `bytea` in Postgres, not object storage (S3/GCS/Supabase Storage) — simplest
   thing that let the storage-quota logic be verified directly against real row sizes for this demo.
   A real deployment would move the bytes to object storage and keep only a pointer + size in
   Postgres, since a database is a poor place to keep growing binary blobs long-term.
+- The Supabase DB credential in use is the full `postgres` superuser role, not a role scoped to
+  just this app's tables — fine for a local-only demo, but a real deployment would create a
+  least-privilege role first.
+- Ran a red-team pass (2026-09-14): confirmed no SQL injection (Sequelize params), no password-hash
+  leakage, no stack-trace leakage, RBAC boundaries hold, and fixed the two real gaps found —
+  brute-force login (now rate-limited via `@nestjs/throttler`, 5/min on `/auth/*`) and wildcard
+  Socket.IO CORS (now scoped to `FRONTEND_ORIGIN`). `npm audit` still shows ~21 findings in
+  transitive/build-time deps (worth a periodic re-check, particularly multer given it handles
+  untrusted uploads) — none currently exploitable at runtime through this app's own code paths.
