@@ -11,5 +11,6 @@ import { TagsModule } from '../tags/tags.module';
   imports: [SequelizeModule.forFeature([Article, ArticleTag]), TagsModule],
   providers: [ArticlesService],
   controllers: [ArticlesController, PublicArticlesController],
+  exports: [ArticlesService],
 })
 export class ArticlesModule {}

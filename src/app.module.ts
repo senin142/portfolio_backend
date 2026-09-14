@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { ArticlesModule } from './articles/articles.module';
 import { TagsModule } from './tags/tags.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { MediaModule } from './media/media.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     TagsModule,
     ArticlesModule,
     RealtimeModule,
+    MediaModule,
   ],
 })
 export class AppModule {}

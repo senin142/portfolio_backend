@@ -21,6 +21,12 @@ codebase.
 - Real-time: a dedicated Socket.IO gateway (`RealtimeModule`), decoupled from the REST surface via
   `@nestjs/event-emitter` — `ArticlesService` emits an `article.published` domain event and the
   gateway is the only thing that knows Socket.IO exists.
+- Image uploads with a shared storage cap: `MediaModule` stores one image per article, with an
+  optional server-side resize (`sharp`, max 1600px wide, re-encoded as JPEG) toggled by the
+  caller. All articles share a single 150MB cap (`STORAGE_CAP_BYTES` in `media.service.ts`) —
+  every upload runs an eviction pass afterward that deletes the oldest images first until usage
+  is back under the cap, so one big unresized upload can't silently starve the rest of the demo.
+  `GET /media/usage` exposes current usage for the dashboard's storage bar.
 - Swagger/OpenAPI docs.
 
 ## Architecture
@@ -72,3 +78,7 @@ Point the [frontend](https://github.com/senin142/portfolio_frontend) at this API
 - No rate limiting or audit logging on auth endpoints.
 - The Socket.IO gateway allows CORS from any origin (`*`) — fine for a public read-only broadcast
   of already-public article metadata, would be scoped down for anything sensitive.
+- Images are stored as `bytea` in Postgres, not object storage (S3/GCS/Supabase Storage) — simplest
+  thing that let the storage-quota logic be verified directly against real row sizes for this demo.
+  A real deployment would move the bytes to object storage and keep only a pointer + size in
+  Postgres, since a database is a poor place to keep growing binary blobs long-term.
