@@ -6,9 +6,10 @@ import { ArticlesService } from './articles.service';
 import { ArticlesController } from './articles.controller';
 import { PublicArticlesController } from './public-articles.controller';
 import { TagsModule } from '../tags/tags.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [SequelizeModule.forFeature([Article, ArticleTag]), TagsModule],
+  imports: [SequelizeModule.forFeature([Article, ArticleTag]), TagsModule, AuditModule],
   providers: [ArticlesService],
   controllers: [ArticlesController, PublicArticlesController],
   exports: [ArticlesService],

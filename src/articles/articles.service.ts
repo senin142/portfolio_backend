@@ -10,6 +10,7 @@ import { TagsService } from '../tags/tags.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { QueryArticleDto } from './dto/query-article.dto';
+import { AuditLogService } from '../audit/audit-log.service';
 
 const includeAll = [
   { model: User, attributes: ['id', 'name', 'email'] },
@@ -23,6 +24,7 @@ export class ArticlesService {
     @InjectModel(ArticleTag) private articleTagModel: typeof ArticleTag,
     private tagsService: TagsService,
     private events: EventEmitter2,
+    private auditLogService: AuditLogService,
   ) {}
 
   async findAll(query: QueryArticleDto) {
@@ -87,9 +89,16 @@ export class ArticlesService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, actorUserId?: string) {
     const article = await this.findById(id);
     await article.destroy();
+    this.auditLogService.log({
+      action: 'article_deleted',
+      actorUserId,
+      targetType: 'article',
+      targetId: id,
+      metadata: { title: article.title, slug: article.slug },
+    });
   }
 
   // ---------- Public (unauthenticated) reads ----------

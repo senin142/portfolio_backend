@@ -61,7 +61,7 @@ export class ArticlesController {
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.articlesService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.articlesService.remove(id, user.id);
   }
 }

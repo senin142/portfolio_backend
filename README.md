@@ -12,6 +12,10 @@ codebase.
 ## What it does
 
 - JWT auth with two roles: `admin` (manages users and content) and `editor` (manages content only).
+  Short-lived (15m) access tokens paired with rotating, revocable refresh tokens — see
+  "Notes" below for the detail. Rate-limited (`@nestjs/throttler`) against brute-force.
+- Audit log (`AuditLogService` / `GET /audit-log`, admin-only) covering auth events and
+  destructive/privileged actions (role changes, deletions).
 - Article CRUD — create / edit / publish / unpublish / delete — with search by title and tags.
 - `ArticlesModule` registers **two controllers sharing one service**: `ArticlesController` (admin,
   JWT-gated, full CRUD) and `PublicArticlesController` (no auth, published-only reads) — the
@@ -76,8 +80,17 @@ Point the [frontend](https://github.com/senin142/portfolio_frontend) at this API
 
 ## Notes / things I'd change for production
 
-- No refresh-token flow — tokens simply expire (`JWT_EXPIRES_IN`) and the user re-logs in.
-- No audit logging on auth endpoints.
+- ~~No refresh-token flow~~ — fixed: access tokens are now short-lived (15m, `JWT_ACCESS_EXPIRES_IN`)
+  paired with a rotating refresh token (30d, `JWT_REFRESH_EXPIRES_IN_DAYS`). `POST /auth/refresh`
+  issues a new pair and immediately revokes the old refresh token server-side (`refresh_tokens`
+  table, only a SHA-256 hash of the token is stored, never the raw value) — reusing an
+  already-rotated token is rejected, and `POST /auth/logout` revokes on demand. The frontend
+  (`lib/api.ts`) retries once on a 401 via a shared in-flight refresh, so this is invisible during
+  normal use; only a fully-expired/revoked refresh token bounces the user to `/login`.
+- ~~No audit logging on auth endpoints~~ — fixed: `audit_logs` table + `AuditLogService`, logging
+  `login_success`/`login_failed`/`signup`/`logout`/`user_role_changed`/`user_deleted`/
+  `article_deleted` with actor, target, IP, and metadata. `GET /audit-log` (admin-only) to view it.
+  Logging is fire-and-forget (never blocks or fails the request it's recording).
 - Images are stored as `bytea` in Postgres, not object storage (S3/GCS/Supabase Storage) — simplest
   thing that let the storage-quota logic be verified directly against real row sizes for this demo.
   A real deployment would move the bytes to object storage and keep only a pointer + size in

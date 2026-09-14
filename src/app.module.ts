@@ -11,6 +11,7 @@ import { ArticlesModule } from './articles/articles.module';
 import { TagsModule } from './tags/tags.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { MediaModule } from './media/media.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { MediaModule } from './media/media.module';
     ArticlesModule,
     RealtimeModule,
     MediaModule,
+    AuditModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

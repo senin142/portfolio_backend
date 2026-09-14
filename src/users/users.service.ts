@@ -3,12 +3,16 @@ import { InjectModel } from '@nestjs/sequelize';
 import * as bcrypt from 'bcrypt';
 import { User } from './user.model';
 import { Role } from '../common/enums/role.enum';
+import { AuditLogService } from '../audit/audit-log.service';
 
 const SALT_ROUNDS = 10;
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User) private userModel: typeof User) {}
+  constructor(
+    @InjectModel(User) private userModel: typeof User,
+    private auditLogService: AuditLogService,
+  ) {}
 
   findAll() {
     return this.userModel.findAll({ order: [['createdAt', 'DESC']] });
@@ -35,18 +39,33 @@ export class UsersService {
     } as User);
   }
 
-  async updateRole(id: string, role: Role) {
+  async updateRole(id: string, role: Role, actorUserId?: string) {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
+    const previousRole = user.role;
     user.role = role;
     await user.save();
+    this.auditLogService.log({
+      action: 'user_role_changed',
+      actorUserId,
+      targetType: 'user',
+      targetId: user.id,
+      metadata: { from: previousRole, to: role },
+    });
     return user;
   }
 
-  async remove(id: string) {
+  async remove(id: string, actorUserId?: string) {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
     await user.destroy();
+    this.auditLogService.log({
+      action: 'user_deleted',
+      actorUserId,
+      targetType: 'user',
+      targetId: id,
+      metadata: { email: user.email },
+    });
   }
 
   async validateCredentials(email: string, password: string) {

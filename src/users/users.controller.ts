@@ -6,6 +6,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -21,12 +23,16 @@ export class UsersController {
   }
 
   @Patch(':id/role')
-  updateRole(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserRoleDto) {
-    return this.usersService.updateRole(id, dto.role);
+  updateRole(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserRoleDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.usersService.updateRole(id, dto.role, actor.id);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.usersService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.usersService.remove(id, actor.id);
   }
 }

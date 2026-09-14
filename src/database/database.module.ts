@@ -6,6 +6,8 @@ import { Article } from '../articles/article.model';
 import { Tag } from '../tags/tag.model';
 import { ArticleTag } from '../tags/article-tag.model';
 import { Media } from '../media/media.model';
+import { RefreshToken } from '../auth/refresh-token.model';
+import { AuditLog } from '../audit/audit-log.model';
 
 @Module({
   imports: [
@@ -22,7 +24,7 @@ import { Media } from '../media/media.model';
         dialectOptions: config.get<boolean>('database.ssl')
           ? { ssl: { require: true, rejectUnauthorized: false } }
           : {},
-        models: [User, Article, Tag, ArticleTag, Media],
+        models: [User, Article, Tag, ArticleTag, Media, RefreshToken, AuditLog],
         // Migrations own the schema; the app never auto-syncs it.
         synchronize: false,
         autoLoadModels: true,
