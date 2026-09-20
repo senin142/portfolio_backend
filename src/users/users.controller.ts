@@ -31,6 +31,11 @@ export class UsersController {
     return this.usersService.updateRole(id, dto.role, actor.id);
   }
 
+  @Patch(':id/approve')
+  approve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.usersService.approve(id, actor.id);
+  }
+
   @Delete(':id')
   remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.usersService.remove(id, actor.id);

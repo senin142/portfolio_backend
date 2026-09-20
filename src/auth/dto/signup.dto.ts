@@ -1,14 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, MinLength } from 'class-validator';
+import { NotCommonPassword } from '../../common/validators/not-common-password.validator';
 
 export class SignupDto {
   @ApiProperty()
   @IsEmail()
   email: string;
 
-  @ApiProperty({ minLength: 8 })
+  @ApiProperty({ minLength: 10 })
   @IsString()
-  @MinLength(8)
+  @MinLength(10)
+  @NotCommonPassword()
   password: string;
 
   @ApiProperty()

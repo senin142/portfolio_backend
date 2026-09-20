@@ -1,6 +1,7 @@
 import { Column, DataType, HasMany, Model, Table } from 'sequelize-typescript';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '../common/enums/role.enum';
+import { UserStatus } from '../common/enums/user-status.enum';
 import { Article } from '../articles/article.model';
 
 @Table({ tableName: 'users', timestamps: true })
@@ -23,6 +24,12 @@ export class User extends Model<User> {
   @ApiProperty({ enum: Role })
   @Column({ type: DataType.ENUM(...Object.values(Role)), allowNull: false, defaultValue: Role.EDITOR })
   role: Role;
+
+  // 'pending' accounts (public self-signups) can't log in until an admin
+  // approves them — see AuthService.login / UsersService.approve.
+  @ApiProperty({ enum: UserStatus })
+  @Column({ type: DataType.ENUM(...Object.values(UserStatus)), allowNull: false, defaultValue: UserStatus.ACTIVE })
+  status: UserStatus;
 
   @HasMany(() => Article, { foreignKey: 'authorId' })
   articles: Article[];

@@ -5,6 +5,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
 
 @ApiTags('audit-log')
 @ApiBearerAuth()
@@ -15,8 +17,10 @@ export class AuditLogController {
   constructor(private auditLogService: AuditLogService) {}
 
   @Get()
-  findRecent(@Query('limit') limit?: string) {
+  findRecent(@Query('limit') limit?: string, @CurrentUser() user?: AuthenticatedUser) {
     const parsed = limit ? Math.min(parseInt(limit, 10) || 100, 500) : 100;
+    // Fire-and-forget, same as every other audit call — never blocks the read.
+    this.auditLogService.log({ action: 'audit_log_viewed', actorUserId: user?.id });
     return this.auditLogService.findRecent(parsed);
   }
 }

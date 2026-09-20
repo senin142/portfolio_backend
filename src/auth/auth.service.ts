@@ -7,6 +7,7 @@ import { RefreshToken } from './refresh-token.model';
 import { UsersService } from '../users/users.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { Role } from '../common/enums/role.enum';
+import { UserStatus } from '../common/enums/user-status.enum';
 import { User } from '../users/user.model';
 
 interface RequestContext {
@@ -23,16 +24,23 @@ export class AuthService {
     private config: ConfigService,
   ) {}
 
+  /** Public signup always creates an editor, and — since anyone with an email
+   * can call this — always lands 'pending' rather than auto-granting a
+   * working account. No tokens are issued; an admin must approve
+   * (UsersService.approve) before the account can log in. See
+   * RED_TEAM_REPORT.md finding #2. */
   async signup(params: { email: string; password: string; name: string }, ctx: RequestContext = {}) {
-    // Public signup always creates an editor; only an existing admin can promote users.
-    const user = await this.usersService.create({ ...params, role: Role.EDITOR });
+    const user = await this.usersService.create({ ...params, role: Role.EDITOR, status: UserStatus.PENDING });
     this.auditLogService.log({
       action: 'signup',
       actorUserId: user.id,
       actorEmail: user.email,
       ipAddress: ctx.ipAddress,
     });
-    return this.buildTokenResponse(user);
+    return {
+      pending: true as const,
+      message: 'Account created. An admin needs to approve it before you can log in.',
+    };
   }
 
   async login(email: string, password: string, ctx: RequestContext = {}) {
@@ -44,6 +52,16 @@ export class AuthService {
         ipAddress: ctx.ipAddress,
       });
       throw new UnauthorizedException('Invalid email or password');
+    }
+    if (user.status !== UserStatus.ACTIVE) {
+      this.auditLogService.log({
+        action: 'login_failed',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        ipAddress: ctx.ipAddress,
+        metadata: { reason: 'pending_approval' },
+      });
+      throw new UnauthorizedException('Your account is pending admin approval');
     }
     this.auditLogService.log({
       action: 'login_success',

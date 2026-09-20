@@ -62,16 +62,31 @@ SHA-256 hash in `refresh_tokens`). `POST /auth/refresh` revokes the old token an
 issues a new pair; reusing an already-rotated token now revokes every token
 sharing its `familyId` (the whole lineage descended from one login), not just
 the reused one — `refresh_token_reuse_detected` is audit-logged when this
-triggers. **Requires migrations `20260101000013-add-refresh-token-family.js` and
-`20260101000014-add-media-uploader.js` to have been run** (both need superuser
-DB creds — see `.env.example`'s documented swap-back-and-forth pattern);
-without them, `familyId`/`uploadedByUserId` don't exist as columns and
-login/signup/refresh (former) or image upload (latter) will fail on `INSERT`.
-Every
+triggers. **Requires migrations `20260101000013-add-refresh-token-family.js`,
+`20260101000014-add-media-uploader.js`, and
+`20260101000015-add-user-status.js` to have been run** (all three need
+superuser DB creds — see `.env.example`'s documented swap-back-and-forth
+pattern); without them, `familyId`/`uploadedByUserId`/`status` don't exist as
+columns and login/signup/refresh (first and third) or image upload (second)
+will fail. Every
 authenticated request re-fetches the user from the DB in `JwtStrategy.validate()`
 and derives `role` from that live row, **not** from the JWT payload — so a role
 change or account deletion takes effect on the very next request, not just at
 token expiry. Rely on this; don't add role-caching that would undo it.
+
+**Account lifecycle**: public `POST /auth/signup` always creates `Role.EDITOR`
+with `status: UserStatus.PENDING` (new `users.status` column) — no tokens are
+issued at signup, just a confirmation message. `AuthService.login` rejects any
+account whose `status !== 'active'`. `PATCH /users/:id/approve` (admin-only)
+flips it to `'active'`, audit-logged as `user_approved`. This closed the
+signup half of red-team finding #2 (open signup previously granted a fully
+working session with zero approval step) — **but changes the demo UX**: a
+fresh self-signup (e.g. someone trying the portfolio) now needs you to
+approve it via `/users` before they can log in. If you'd rather keep signup
+frictionless for demo purposes and accept that risk while this stays
+local-only, change `AuthService.signup`'s `status: UserStatus.PENDING` to
+`UserStatus.ACTIVE` — everything else (ownership checks, etc.) stays intact
+either way.
 
 **Authorization**: three primitives, always in this order —
 `JwtAuthGuard` (is this a valid token), `RolesGuard`/`@Roles()` (does this role
@@ -146,6 +161,9 @@ rule in this file.
   missed audit entry must never fail or block the request it's logging. Follow
   this pattern for any new audit call site; don't `await` it if failure would
   propagate.
+- Custom `class-validator` rules live in `common/validators/` as a
+  `registerDecorator`-based decorator (see `NotCommonPassword` /
+  `common-passwords.ts` for the pattern) — not inline in the DTO.
 - Slugs: `^[a-z0-9]+(?:-[a-z0-9]+)*$` enforced by DTO `@Matches`, uniqueness
   checked in the service (`assertSlugAvailable`), not a DB-level constraint check
   in application code (the DB does have a `unique` index as a backstop).

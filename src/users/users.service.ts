@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/sequelize';
 import * as bcrypt from 'bcrypt';
 import { User } from './user.model';
 import { Role } from '../common/enums/role.enum';
+import { UserStatus } from '../common/enums/user-status.enum';
 import { AuditLogService } from '../audit/audit-log.service';
 
 const SALT_ROUNDS = 10;
@@ -26,7 +27,13 @@ export class UsersService {
     return this.userModel.findOne({ where: { email } });
   }
 
-  async create(params: { email: string; password: string; name: string; role?: Role }) {
+  async create(params: {
+    email: string;
+    password: string;
+    name: string;
+    role?: Role;
+    status?: UserStatus;
+  }) {
     const existing = await this.findByEmail(params.email);
     if (existing) throw new ConflictException('A user with this email already exists');
 
@@ -36,7 +43,22 @@ export class UsersService {
       passwordHash,
       name: params.name,
       role: params.role ?? Role.EDITOR,
+      status: params.status ?? UserStatus.ACTIVE,
     } as User);
+  }
+
+  async approve(id: string, actorUserId?: string) {
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    user.status = UserStatus.ACTIVE;
+    await user.save();
+    this.auditLogService.log({
+      action: 'user_approved',
+      actorUserId,
+      targetType: 'user',
+      targetId: user.id,
+    });
+    return user;
   }
 
   async updateRole(id: string, role: Role, actorUserId?: string) {
