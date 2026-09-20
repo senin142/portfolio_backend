@@ -18,6 +18,12 @@ export class RefreshToken extends Model<RefreshToken> {
   @Column({ type: DataType.STRING, allowNull: false, unique: true })
   tokenHash: string;
 
+  // Shared across every token descended from one login via rotation. Lets
+  // AuthService.refresh() revoke the whole lineage the instant a
+  // already-rotated (i.e. stolen) token gets reused, not just that one token.
+  @Column({ type: DataType.UUID, allowNull: false })
+  familyId: string;
+
   @Column({ type: DataType.DATE, allowNull: false })
   expiresAt: Date;
 

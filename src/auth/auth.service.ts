@@ -62,7 +62,28 @@ export class AuthService {
     const tokenHash = this.hashToken(rawToken);
     const stored = await this.refreshTokenModel.findOne({ where: { tokenHash } });
 
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+    if (!stored) throw new UnauthorizedException('Invalid or expired refresh token');
+
+    if (stored.revokedAt) {
+      // This exact token was already rotated once — someone presenting it again
+      // is either the legitimate owner replaying an old request, or an attacker
+      // who stole it before the legitimate owner's next refresh. We can't tell
+      // which, so treat it as theft: kill every session descended from this
+      // token's login (its whole family), not just this one token.
+      await this.refreshTokenModel.update(
+        { revokedAt: new Date() },
+        { where: { familyId: stored.familyId, revokedAt: null } },
+      );
+      this.auditLogService.log({
+        action: 'refresh_token_reuse_detected',
+        actorUserId: stored.userId,
+        targetType: 'refresh_token_family',
+        targetId: stored.familyId,
+      });
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    if (stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
@@ -72,7 +93,7 @@ export class AuthService {
     const user = await this.usersService.findById(stored.userId);
     if (!user) throw new UnauthorizedException('Invalid or expired refresh token');
 
-    return this.buildTokenResponse(user);
+    return this.buildTokenResponse(user, stored.familyId);
   }
 
   async logout(rawToken: string) {
@@ -85,7 +106,9 @@ export class AuthService {
     }
   }
 
-  private async buildTokenResponse(user: User) {
+  /** familyId: omit to start a new family (fresh login/signup); pass the
+   * previous token's familyId to continue it (rotation via refresh()). */
+  private async buildTokenResponse(user: User, familyId: string = crypto.randomUUID()) {
     const payload = { sub: user.id, email: user.email, role: user.role };
     const accessToken = this.jwtService.sign(payload);
 
@@ -95,6 +118,7 @@ export class AuthService {
     await this.refreshTokenModel.create({
       userId: user.id,
       tokenHash: this.hashToken(rawRefreshToken),
+      familyId,
       expiresAt,
     } as RefreshToken);
 

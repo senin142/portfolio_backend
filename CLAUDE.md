@@ -59,8 +59,13 @@ one service**, never one controller branching on auth state.
 **Auth model**: short-lived (15m) JWT access tokens + rotating, revocable refresh
 tokens (raw value only ever returned to the client once, stored server-side as a
 SHA-256 hash in `refresh_tokens`). `POST /auth/refresh` revokes the old token and
-issues a new pair; reusing an already-rotated token is rejected (but does **not**
-yet revoke the whole token family — open finding, see red-team report). Every
+issues a new pair; reusing an already-rotated token now revokes every token
+sharing its `familyId` (the whole lineage descended from one login), not just
+the reused one — `refresh_token_reuse_detected` is audit-logged when this
+triggers. **Requires migration `20260101000013-add-refresh-token-family.js` to
+have been run** (needs superuser DB creds — see that migration's comment and
+`.env.example`); without it, `familyId` doesn't exist as a column and
+login/signup/refresh will all fail on the `INSERT`. Every
 authenticated request re-fetches the user from the DB in `JwtStrategy.validate()`
 and derives `role` from that live row, **not** from the JWT payload — so a role
 change or account deletion takes effect on the very next request, not just at

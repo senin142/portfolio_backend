@@ -9,7 +9,8 @@ export type AuditAction =
   | 'logout'
   | 'user_role_changed'
   | 'user_deleted'
-  | 'article_deleted';
+  | 'article_deleted'
+  | 'refresh_token_reuse_detected';
 
 @Injectable()
 export class AuditLogService {
