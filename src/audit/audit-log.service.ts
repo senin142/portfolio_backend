@@ -12,7 +12,8 @@ export type AuditAction =
   | 'article_deleted'
   | 'refresh_token_reuse_detected'
   | 'audit_log_viewed'
-  | 'user_approved';
+  | 'user_approved'
+  | 'user_auto_deleted';
 
 @Injectable()
 export class AuditLogService {

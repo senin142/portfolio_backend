@@ -31,6 +31,18 @@ export class User extends Model<User> {
   @Column({ type: DataType.ENUM(...Object.values(UserStatus)), allowNull: false, defaultValue: UserStatus.ACTIVE })
   status: UserStatus;
 
+  // Null until the first successful login. A 'pending' account can never log
+  // in (AuthService.login rejects it), so this stays null for the whole
+  // window UserCleanupService cares about — see that file for the policy.
+  @Column({ type: DataType.DATE, allowNull: true })
+  lastLoginAt: Date | null;
+
+  // Populated by Sequelize via `timestamps: true` above — declared here
+  // (no @Column) purely so TypeScript knows the property exists; no model
+  // in this codebase had needed to read it directly until UserCleanupService.
+  @ApiProperty()
+  readonly createdAt: Date;
+
   @HasMany(() => Article, { foreignKey: 'authorId' })
   articles: Article[];
 

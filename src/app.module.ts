@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import configuration from './config/configuration';
 import { DatabaseModule } from './database/database.module';
@@ -21,6 +22,11 @@ import { AuditModule } from './audit/audit.module';
     // (and the free-tier host itself) from being hammered.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     EventEmitterModule.forRoot(),
+    // Powers UserCleanupService's daily stale-pending-account job. Only runs
+    // while this process is up — there's no external cron on a local-only
+    // dev server, so it fires on whatever schedule the app happens to be
+    // running through, not necessarily exactly 3am every day.
+    ScheduleModule.forRoot(),
     DatabaseModule,
     AuthModule,
     UsersModule,

@@ -9,6 +9,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { Role } from '../common/enums/role.enum';
 import { UserStatus } from '../common/enums/user-status.enum';
 import { User } from '../users/user.model';
+import { daysRemainingUntilAutoDeletion, deletionReferenceDate } from '../users/pending-account-policy';
 
 interface RequestContext {
   ipAddress?: string | null;
@@ -61,8 +62,17 @@ export class AuthService {
         ipAddress: ctx.ipAddress,
         metadata: { reason: 'pending_approval' },
       });
-      throw new UnauthorizedException('Your account is pending admin approval');
+      // A pending account can never successfully log in, so this rejection
+      // is the only "login" event it ever has — surface the auto-deletion
+      // countdown here rather than a separate notification mechanism (see
+      // UserCleanupService for the policy this describes).
+      const daysLeft = daysRemainingUntilAutoDeletion(deletionReferenceDate(user));
+      throw new UnauthorizedException(
+        `Your account is pending admin approval. If it isn't approved first, it will be automatically deleted in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`,
+      );
     }
+    user.lastLoginAt = new Date();
+    await user.save();
     this.auditLogService.log({
       action: 'login_success',
       actorUserId: user.id,

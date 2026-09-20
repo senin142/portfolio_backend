@@ -16,10 +16,10 @@ references that this doc intentionally doesn't duplicate.
 ## Stack
 
 NestJS 10 · TypeScript · Sequelize-TypeScript (Postgres via `pg`) · passport-jwt ·
-`@nestjs/throttler` · `@nestjs/event-emitter` · Socket.IO (`@nestjs/websockets`) ·
-`sharp` (image resize) · `bcrypt` · `sequelize-cli` for migrations. DB is a hosted
-Supabase Postgres project (session pooler, not direct connection — see
-`.env.example` comments for why).
+`@nestjs/throttler` · `@nestjs/event-emitter` · `@nestjs/schedule` (cron jobs) ·
+Socket.IO (`@nestjs/websockets`) · `sharp` (image resize) · `bcrypt` ·
+`sequelize-cli` for migrations. DB is a hosted Supabase Postgres project (session
+pooler, not direct connection — see `.env.example` comments for why).
 
 ## Commands
 
@@ -63,12 +63,12 @@ issues a new pair; reusing an already-rotated token now revokes every token
 sharing its `familyId` (the whole lineage descended from one login), not just
 the reused one — `refresh_token_reuse_detected` is audit-logged when this
 triggers. **Requires migrations `20260101000013-add-refresh-token-family.js`,
-`20260101000014-add-media-uploader.js`, and
-`20260101000015-add-user-status.js` to have been run** (all three need
+`20260101000014-add-media-uploader.js`, `20260101000015-add-user-status.js`,
+and `20260101000016-add-user-last-login.js` to have been run** (all four need
 superuser DB creds — see `.env.example`'s documented swap-back-and-forth
-pattern); without them, `familyId`/`uploadedByUserId`/`status` don't exist as
-columns and login/signup/refresh (first and third) or image upload (second)
-will fail. Every
+pattern); without them, `familyId`/`uploadedByUserId`/`status`/`lastLoginAt`
+don't exist as columns and login/signup/refresh or image upload will fail.
+Every
 authenticated request re-fetches the user from the DB in `JwtStrategy.validate()`
 and derives `role` from that live row, **not** from the JWT payload — so a role
 change or account deletion takes effect on the very next request, not just at
@@ -88,6 +88,25 @@ local-only, change `AuthService.signup`'s `status: UserStatus.PENDING` to
 `UserStatus.ACTIVE` — everything else (ownership checks, etc.) stays intact
 either way.
 
+`UserCleanupService` (`users/user-cleanup.service.ts`) auto-deletes `PENDING`
+accounts that are still pending 10 days after creation (`users.lastLoginAt`
+tracks the last successful login; a `PENDING` account can never log in, so
+its clock is always its `createdAt` in practice — see
+`pending-account-policy.ts` for the exact rule). Runs daily via
+`@nestjs/schedule`'s `@Cron` (`ScheduleModule.forRoot()` in `app.module.ts`)
+— **only while this process is up**, there's no external cron on a
+local-only dev server. Scope is deliberately narrow (see that file's header
+comment): `ADMIN` accounts are never eligible, and a `PENDING` account can
+never have created an article, so this can never cascade-delete real
+content — only ever removes an empty, unapproved user row. Every failed
+login attempt on a still-pending account gets the countdown in its error
+message (`daysRemainingUntilAutoDeletion` in `pending-account-policy.ts`) —
+that function and this service must stay using the same
+`PENDING_ACCOUNT_TTL_DAYS` constant; don't let them drift into different
+numbers. `frontend/src/lib/pending-account.ts` mirrors the same day-math for
+display on `/users` — **that copy is display-only, not authoritative**; if
+you change the TTL, update both.
+
 **Authorization**: three primitives, always in this order —
 `JwtAuthGuard` (is this a valid token), `RolesGuard`/`@Roles()` (does this role
 match), then `assertOwnerOrAdmin(user, resourceAuthorId)` (`common/authorization.ts`)
@@ -100,11 +119,9 @@ ownership-scoped** (any authenticated editor can list/view any article, includin
 others' drafts — a newsroom-visibility choice, not an oversight). If you add a new
 mutating route on an authored resource, call `assertOwnerOrAdmin` the same way;
 don't add role-gating alone and assume that's equivalent — it isn't, that's the
-exact gap this was added to close (see red-team report finding #2).
-Public self-signup still grants `EDITOR` with no approval step — that half of
-finding #2 is a deliberate deferred decision (fine while this only runs locally;
-gate it before ever deploying publicly), not something this ownership check
-substitutes for.
+exact gap this was added to close (see red-team report finding #2). Signup is
+also gated now (see Account lifecycle above) — both halves of finding #2 are
+closed.
 
 **Realtime**: `ArticlesService` never touches Socket.IO. It emits an
 `article.published` domain event via `EventEmitter2` (`this.events.emit(...)` in
@@ -179,9 +196,10 @@ rule in this file.
   silently reopens a MITM gap. If Supabase rotates their CA, re-download it (see
   `certs/README.md`) and replace the file instead.
 - `npm audit` flags multer DoS-class CVEs (plus transitive ones in `qs`/`tar`/
-  `uuid`) with no fix on the current stable line — accepted residual risk,
-  documented in the red-team report, re-check periodically rather than
-  reflexively bumping to an alpha.
+  `uuid`, and now `body-parser`/`js-yaml` pulled in via `@nestjs/schedule`)
+  with no fix on the current stable line — accepted residual risk, documented
+  in the red-team report, re-check periodically rather than reflexively
+  bumping to an alpha.
 - `file-type` is deliberately pinned to `v16` (`MediaService.upload`), not the
   current major — v17+ is pure ESM and this project compiles to CommonJS.
   Don't bump it without switching the call site to a dynamic `import()`.
