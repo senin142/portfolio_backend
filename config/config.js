@@ -1,4 +1,12 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+
+// Same reasoning as src/database/database.module.ts: Supabase signs pooler
+// certs with its own private root CA, so it must be pinned explicitly rather
+// than disabling validation. Keep both copies of this logic in sync.
+const supabaseCaPath = path.join(__dirname, '..', 'certs', 'supabase-ca.pem');
+const supabaseCa = fs.existsSync(supabaseCaPath) ? fs.readFileSync(supabaseCaPath, 'utf8') : undefined;
 
 const common = {
   username: process.env.DB_USERNAME,
@@ -9,7 +17,7 @@ const common = {
   dialect: 'postgres',
   dialectOptions:
     process.env.DB_SSL === 'true'
-      ? { ssl: { require: true, rejectUnauthorized: false } }
+      ? { ssl: { require: true, rejectUnauthorized: true, ca: supabaseCa } }
       : {},
 };
 

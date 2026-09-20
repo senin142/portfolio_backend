@@ -139,9 +139,11 @@ rule in this file.
 
 ## Known trade-offs (not bugs to silently "fix" — read the reasoning first)
 
-- `database.module.ts`: `rejectUnauthorized: false` on the Supabase SSL
-  connection — encrypted but not certificate-validated. Documented decision, not
-  an oversight; see red-team report before changing it.
+- DB TLS: `database.module.ts` and `config/config.js` both pin Supabase's
+  private root CA (`certs/supabase-ca.pem`) with `rejectUnauthorized: true` — do
+  not revert to `rejectUnauthorized: false` to unblock a connection error, that
+  silently reopens a MITM gap. If Supabase rotates their CA, re-download it (see
+  `certs/README.md`) and replace the file instead.
 - No `helmet()`, no magic-byte file validation, no `sharp` pixel-dimension guard
   — all open P1s in the red-team report, not yet decided/fixed as of last pass.
 - `npm audit` flags multer DoS-class CVEs with no fix on the current stable line
