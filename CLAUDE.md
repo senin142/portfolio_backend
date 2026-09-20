@@ -99,10 +99,17 @@ deliberate simplification so the shared 150MB storage cap (`STORAGE_CAP_BYTES` i
 `media.service.ts`) is directly verifiable against real row sizes. One image per
 article (`mediaModel.destroy({ where: { articleId } })` before every create).
 Uploading past the cap evicts the *oldest* image across *all* articles, not just
-the uploader's own — a real griefing vector once combined with the no-ownership
-gap above (red-team finding #10). `fileFilter` in `media.controller.ts` trusts
-the client-supplied `Content-Type` header, not actual file content — see red-team
-finding #5 before changing upload validation.
+the uploader's own — a real griefing vector, though now scoped down by the
+ownership check above (an editor can only trigger it by uploading to their own
+articles, not by targeting others' — red-team finding #10 is still open as a
+defense-in-depth item, just less severe). Upload validation is two-layered:
+`fileFilter` in `media.controller.ts` does a cheap first-pass check on the
+client-declared `Content-Type` (attacker-controlled, not trustworthy alone);
+`MediaService.upload` sniffs the actual file signature (`file-type`) and uses
+that as the real gate and the source of truth for the stored/served
+`mimeType`. It also runs every upload through `sharp(..., { limitInputPixels
+})` regardless of whether resize is requested, to reject decompression bombs
+before a full decode.
 
 **Migrations own the schema** — `synchronize: false` always
 (`database.module.ts`). Never add a model field without a matching
@@ -144,11 +151,13 @@ rule in this file.
   not revert to `rejectUnauthorized: false` to unblock a connection error, that
   silently reopens a MITM gap. If Supabase rotates their CA, re-download it (see
   `certs/README.md`) and replace the file instead.
-- No `helmet()`, no magic-byte file validation, no `sharp` pixel-dimension guard
-  — all open P1s in the red-team report, not yet decided/fixed as of last pass.
-- `npm audit` flags multer DoS-class CVEs with no fix on the current stable line
-  — accepted residual risk, documented in the red-team report, re-check
-  periodically rather than reflexively bumping to an alpha.
+- `npm audit` flags multer DoS-class CVEs (plus transitive ones in `qs`/`tar`/
+  `uuid`) with no fix on the current stable line — accepted residual risk,
+  documented in the red-team report, re-check periodically rather than
+  reflexively bumping to an alpha.
+- `file-type` is deliberately pinned to `v16` (`MediaService.upload`), not the
+  current major — v17+ is pure ESM and this project compiles to CommonJS.
+  Don't bump it without switching the call site to a dynamic `import()`.
 
 ## Keeping this file updated
 

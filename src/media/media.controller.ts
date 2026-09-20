@@ -15,9 +15,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { MediaService } from './media.service';
+import { ALLOWED_MIME_TYPES, MediaService } from './media.service';
 
-const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -41,6 +40,11 @@ export class MediaController {
 
   @Post('articles/:articleId')
   @UseInterceptors(
+    // Cheap first-pass only — checks the client-declared Content-Type so an
+    // obviously-wrong upload gets rejected before its body is even buffered.
+    // This is NOT the real security gate: MediaService.upload sniffs the
+    // actual file signature (file-type) and treats THAT as the source of
+    // truth, since Content-Type here is attacker-controlled.
     FileInterceptor('file', {
       limits: { fileSize: MAX_UPLOAD_BYTES },
       fileFilter: (req, file, cb) => {

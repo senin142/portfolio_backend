@@ -7,11 +7,19 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+
+  // Swagger UI's inline scripts/styles need a relaxed CSP, so scope the global
+  // helmet() (which defaults to a strict CSP) off for /api/docs and apply a
+  // no-CSP helmet there instead — still gets the other headers (nosniff,
+  // frame-ancestors, etc.), just not the script/style restrictions Swagger trips.
+  app.use('/api/docs', helmet({ contentSecurityPolicy: false }));
+  app.use(helmet());
 
   app.enableCors({ origin: config.get<string>('frontendOrigin'), credentials: true });
   app.useGlobalPipes(
@@ -25,6 +33,9 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
+  // Deliberately public, no auth — showing clean API design is part of the
+  // point of this portfolio project. See RED_TEAM_REPORT.md decision #4 if
+  // that ever needs to change (e.g. once real user data flows through it).
   SwaggerModule.setup('api/docs', app, document);
 
   const port = config.get<number>('port') || 3001;

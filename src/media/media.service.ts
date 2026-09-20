@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import sharp from 'sharp';
+import { fromBuffer as detectFileType } from 'file-type';
 import { Media } from './media.model';
 import { ArticlesService } from '../articles/articles.service';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
@@ -9,6 +10,15 @@ import { assertOwnerOrAdmin } from '../common/authorization';
 export const STORAGE_CAP_BYTES = 150 * 1024 * 1024; // 150 MB — keeps well under Supabase's free-tier 500MB DB cap
 const RESIZE_MAX_WIDTH = 1600;
 const RESIZE_JPEG_QUALITY = 80;
+// ~50 megapixels — generous for a CMS hero image, small enough to stop a
+// decompression bomb (a tiny file declaring an enormous canvas) from getting
+// fully decoded into memory. Applies before resize AND on the non-resize path.
+const MAX_INPUT_PIXELS = 50_000_000;
+// Single source of truth for allowed image types — checked twice: a fast,
+// cheap pre-check in the controller's fileFilter (client-declared
+// Content-Type, rejects obviously-wrong uploads before buffering), and the
+// real gate here against the file's actual sniffed content.
+export const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 @Injectable()
 export class MediaService {
@@ -24,12 +34,30 @@ export class MediaService {
     const article = await this.articlesService.findById(articleId); // 404s if the article doesn't exist
     assertOwnerOrAdmin(user, article.authorId);
 
+    // The controller's fileFilter only checked the client-declared
+    // Content-Type, which is attacker-controlled — sniff the actual file
+    // signature here and use IT as the source of truth for what gets stored
+    // and served back, not whatever the upload claimed to be.
+    const detected = await detectFileType(file.buffer);
+    if (!detected || !ALLOWED_MIME_TYPES.has(detected.mime)) {
+      throw new BadRequestException(
+        `File content does not match an allowed image type (detected: ${detected?.mime ?? 'unknown'})`,
+      );
+    }
+
+    // limitInputPixels rejects a decompression bomb (tiny file, huge declared
+    // canvas) before libvips fully decodes it — .metadata() forces that check
+    // even when resize isn't requested, since the resize branch below is the
+    // only place sharp would otherwise run.
+    const image = sharp(file.buffer, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' });
+    await image.metadata();
+
     let buffer: Buffer = file.buffer;
-    let mimeType = file.mimetype;
+    let mimeType = detected.mime;
     let resized = false;
 
     if (resize) {
-      buffer = await sharp(file.buffer)
+      buffer = await image
         .resize({ width: RESIZE_MAX_WIDTH, withoutEnlargement: true })
         .jpeg({ quality: RESIZE_JPEG_QUALITY })
         .toBuffer();
