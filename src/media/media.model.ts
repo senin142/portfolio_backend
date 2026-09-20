@@ -1,5 +1,6 @@
 import { BelongsTo, Column, DataType, ForeignKey, Model, Table } from 'sequelize-typescript';
 import { Article } from '../articles/article.model';
+import { User } from '../users/user.model';
 
 @Table({ tableName: 'media', timestamps: true })
 export class Media extends Model<Media> {
@@ -12,6 +13,13 @@ export class Media extends Model<Media> {
 
   @BelongsTo(() => Article)
   article: Article;
+
+  // Nullable: rows created before this column existed have no known uploader.
+  // Used to enforce a per-user share of the shared storage cap — see
+  // MediaService.MAX_PER_USER_BYTES.
+  @ForeignKey(() => User)
+  @Column({ type: DataType.UUID, allowNull: true })
+  uploadedByUserId: string | null;
 
   @Column({ type: DataType.STRING, allowNull: false })
   filename: string;

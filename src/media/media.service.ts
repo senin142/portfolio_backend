@@ -6,8 +6,17 @@ import { Media } from './media.model';
 import { ArticlesService } from '../articles/articles.service';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
 import { assertOwnerOrAdmin } from '../common/authorization';
+import { Role } from '../common/enums/role.enum';
 
 export const STORAGE_CAP_BYTES = 150 * 1024 * 1024; // 150 MB — keeps well under Supabase's free-tier 500MB DB cap
+// Bounds how much of the shared cap a single non-admin account can consume.
+// Without this, any account that can create an article (trivial via open
+// signup — see red-team report finding #2) could upload enough images across
+// its own articles to trigger the oldest-first global eviction below and wipe
+// out every OTHER author's images too (finding #10). Admins are exempt — the
+// cap exists to bound one untrusted account's blast radius, not to limit
+// legitimate admin use.
+const MAX_PER_USER_BYTES = Math.floor(STORAGE_CAP_BYTES / 5); // 30MB
 const RESIZE_MAX_WIDTH = 1600;
 const RESIZE_JPEG_QUALITY = 80;
 // ~50 megapixels — generous for a CMS hero image, small enough to stop a
@@ -71,8 +80,19 @@ export class MediaService {
       );
     }
 
-    // One image per article — replace whatever was there before.
+    // One image per article — replace whatever was there before. Do this
+    // before the per-user cap check so replacing your OWN article's image
+    // doesn't double-count its old bytes against your share.
     await this.mediaModel.destroy({ where: { articleId } });
+
+    if (user.role !== Role.ADMIN) {
+      const userTotal = await this.getUserTotalBytes(user.id);
+      if (userTotal + buffer.length > MAX_PER_USER_BYTES) {
+        throw new BadRequestException(
+          `This upload would put your own images at ${((userTotal + buffer.length) / 1024 / 1024).toFixed(1)}MB, over your ${(MAX_PER_USER_BYTES / 1024 / 1024).toFixed(0)}MB share of the shared ${STORAGE_CAP_BYTES / 1024 / 1024}MB cap`,
+        );
+      }
+    }
 
     const media = await this.mediaModel.create({
       articleId,
@@ -80,6 +100,7 @@ export class MediaService {
       mimeType,
       sizeBytes: buffer.length,
       resized,
+      uploadedByUserId: user.id,
       data: buffer,
     } as Media);
 
@@ -111,6 +132,11 @@ export class MediaService {
 
   private async getTotalBytes(): Promise<number> {
     const rows = await this.mediaModel.findAll({ attributes: ['sizeBytes'] });
+    return rows.reduce((sum, row) => sum + row.sizeBytes, 0);
+  }
+
+  private async getUserTotalBytes(userId: string): Promise<number> {
+    const rows = await this.mediaModel.findAll({ where: { uploadedByUserId: userId }, attributes: ['sizeBytes'] });
     return rows.reduce((sum, row) => sum + row.sizeBytes, 0);
   }
 

@@ -62,10 +62,12 @@ SHA-256 hash in `refresh_tokens`). `POST /auth/refresh` revokes the old token an
 issues a new pair; reusing an already-rotated token now revokes every token
 sharing its `familyId` (the whole lineage descended from one login), not just
 the reused one — `refresh_token_reuse_detected` is audit-logged when this
-triggers. **Requires migration `20260101000013-add-refresh-token-family.js` to
-have been run** (needs superuser DB creds — see that migration's comment and
-`.env.example`); without it, `familyId` doesn't exist as a column and
-login/signup/refresh will all fail on the `INSERT`. Every
+triggers. **Requires migrations `20260101000013-add-refresh-token-family.js` and
+`20260101000014-add-media-uploader.js` to have been run** (both need superuser
+DB creds — see `.env.example`'s documented swap-back-and-forth pattern);
+without them, `familyId`/`uploadedByUserId` don't exist as columns and
+login/signup/refresh (former) or image upload (latter) will fail on `INSERT`.
+Every
 authenticated request re-fetches the user from the DB in `JwtStrategy.validate()`
 and derives `role` from that live row, **not** from the JWT payload — so a role
 change or account deletion takes effect on the very next request, not just at
@@ -103,11 +105,13 @@ emit a domain event and add a listener in the gateway, don't reach into
 deliberate simplification so the shared 150MB storage cap (`STORAGE_CAP_BYTES` in
 `media.service.ts`) is directly verifiable against real row sizes. One image per
 article (`mediaModel.destroy({ where: { articleId } })` before every create).
-Uploading past the cap evicts the *oldest* image across *all* articles, not just
-the uploader's own — a real griefing vector, though now scoped down by the
-ownership check above (an editor can only trigger it by uploading to their own
-articles, not by targeting others' — red-team finding #10 is still open as a
-defense-in-depth item, just less severe). Upload validation is two-layered:
+Uploading past the cap evicts the *oldest* image across *all* articles, not
+just the uploader's own — bounded two ways now: the ownership check above (an
+editor can only trigger it by uploading to their own articles), plus a
+per-user soft cap (`MAX_PER_USER_BYTES`, 30MB — a fifth of the shared pool,
+tracked via `Media.uploadedByUserId`) that stops one account from filling
+*several of its own* articles to evict everyone else's images. Admins are
+exempt from the per-user cap. Upload validation is two-layered:
 `fileFilter` in `media.controller.ts` does a cheap first-pass check on the
 client-declared `Content-Type` (attacker-controlled, not trustworthy alone);
 `MediaService.upload` sniffs the actual file signature (`file-type`) and uses
