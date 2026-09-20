@@ -11,6 +11,8 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { QueryArticleDto } from './dto/query-article.dto';
 import { AuditLogService } from '../audit/audit-log.service';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
+import { assertOwnerOrAdmin } from '../common/authorization';
 
 const includeAll = [
   { model: User, attributes: ['id', 'name', 'email'] },
@@ -56,8 +58,9 @@ export class ArticlesService {
     return created;
   }
 
-  async update(id: string, dto: UpdateArticleDto) {
+  async update(id: string, dto: UpdateArticleDto, user: AuthenticatedUser) {
     const article = await this.findById(id);
+    assertOwnerOrAdmin(user, article.authorId);
     const wasPublished = article.published;
     if (dto.slug && dto.slug !== article.slug) {
       await this.assertSlugAvailable(dto.slug);
@@ -70,8 +73,9 @@ export class ArticlesService {
     return updated;
   }
 
-  async setPublished(id: string, published: boolean) {
+  async setPublished(id: string, published: boolean, user: AuthenticatedUser) {
     const article = await this.findById(id);
+    assertOwnerOrAdmin(user, article.authorId);
     const wasPublished = article.published;
     article.published = published;
     await article.save();
@@ -89,12 +93,13 @@ export class ArticlesService {
     });
   }
 
-  async remove(id: string, actorUserId?: string) {
+  async remove(id: string, user: AuthenticatedUser) {
     const article = await this.findById(id);
+    assertOwnerOrAdmin(user, article.authorId);
     await article.destroy();
     this.auditLogService.log({
       action: 'article_deleted',
-      actorUserId,
+      actorUserId: user.id,
       targetType: 'article',
       targetId: id,
       metadata: { title: article.title, slug: article.slug },

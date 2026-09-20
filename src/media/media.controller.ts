@@ -23,6 +23,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
 
 @ApiTags('media')
 @ApiBearerAuth()
@@ -53,14 +55,15 @@ export class MediaController {
   upload(
     @Param('articleId', ParseUUIDPipe) articleId: string,
     @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthenticatedUser,
     @Query('resize') resize?: string,
   ) {
-    return this.mediaService.upload(articleId, file, resize === 'true');
+    return this.mediaService.upload(articleId, file, resize === 'true', user);
   }
 
   @Delete('articles/:articleId')
-  remove(@Param('articleId', ParseUUIDPipe) articleId: string) {
-    return this.mediaService.removeByArticleId(articleId);
+  remove(@Param('articleId', ParseUUIDPipe) articleId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.mediaService.removeByArticleId(articleId, user);
   }
 
   // Authenticated preview for the dashboard — works for draft/unpublished articles too,

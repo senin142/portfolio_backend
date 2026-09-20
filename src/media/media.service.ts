@@ -3,6 +3,8 @@ import { InjectModel } from '@nestjs/sequelize';
 import sharp from 'sharp';
 import { Media } from './media.model';
 import { ArticlesService } from '../articles/articles.service';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
+import { assertOwnerOrAdmin } from '../common/authorization';
 
 export const STORAGE_CAP_BYTES = 150 * 1024 * 1024; // 150 MB — keeps well under Supabase's free-tier 500MB DB cap
 const RESIZE_MAX_WIDTH = 1600;
@@ -17,9 +19,10 @@ export class MediaService {
     private articlesService: ArticlesService,
   ) {}
 
-  async upload(articleId: string, file: Express.Multer.File, resize: boolean) {
+  async upload(articleId: string, file: Express.Multer.File, resize: boolean, user: AuthenticatedUser) {
     if (!file) throw new BadRequestException('No image file was provided');
-    await this.articlesService.findById(articleId); // 404s if the article doesn't exist
+    const article = await this.articlesService.findById(articleId); // 404s if the article doesn't exist
+    assertOwnerOrAdmin(user, article.authorId);
 
     let buffer: Buffer = file.buffer;
     let mimeType = file.mimetype;
@@ -57,7 +60,9 @@ export class MediaService {
     return { id: media.id, sizeBytes: media.sizeBytes, resized: media.resized, mimeType: media.mimeType };
   }
 
-  async removeByArticleId(articleId: string) {
+  async removeByArticleId(articleId: string, user: AuthenticatedUser) {
+    const article = await this.articlesService.findById(articleId); // 404s if the article doesn't exist
+    assertOwnerOrAdmin(user, article.authorId);
     await this.mediaModel.destroy({ where: { articleId } });
   }
 

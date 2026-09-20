@@ -66,14 +66,23 @@ and derives `role` from that live row, **not** from the JWT payload — so a rol
 change or account deletion takes effect on the very next request, not just at
 token expiry. Rely on this; don't add role-caching that would undo it.
 
-**Authorization**: `JwtAuthGuard` (is this a valid token) +
-`RolesGuard`/`@Roles()` (does this role match) are the only two authorization
-primitives in the codebase. **There is no ownership/object-level check anywhere**
-— any `EDITOR` can mutate any article or media row, not just their own. This is
-intentional-but-unresolved (see red-team report finding #2) — if you add a new
-mutating route, match the existing pattern (role-gated only) unless the ownership
-question has been explicitly resolved; don't silently add ownership checks to one
-route and not others, that's worse than consistent behavior either way.
+**Authorization**: three primitives, always in this order —
+`JwtAuthGuard` (is this a valid token), `RolesGuard`/`@Roles()` (does this role
+match), then `assertOwnerOrAdmin(user, resourceAuthorId)` (`common/authorization.ts`)
+called manually inside the service method, after the resource is loaded, before
+it's mutated. `ADMIN` always bypasses the ownership check; `EDITOR` may only
+mutate resources where `resourceAuthorId === user.id`. This is enforced today on
+every mutating `ArticlesService`/`MediaService` method (`update`, `setPublished`,
+`remove`, `upload`, `removeByArticleId`) — **reads are intentionally not
+ownership-scoped** (any authenticated editor can list/view any article, including
+others' drafts — a newsroom-visibility choice, not an oversight). If you add a new
+mutating route on an authored resource, call `assertOwnerOrAdmin` the same way;
+don't add role-gating alone and assume that's equivalent — it isn't, that's the
+exact gap this was added to close (see red-team report finding #2).
+Public self-signup still grants `EDITOR` with no approval step — that half of
+finding #2 is a deliberate deferred decision (fine while this only runs locally;
+gate it before ever deploying publicly), not something this ownership check
+substitutes for.
 
 **Realtime**: `ArticlesService` never touches Socket.IO. It emits an
 `article.published` domain event via `EventEmitter2` (`this.events.emit(...)` in

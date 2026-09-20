@@ -46,22 +46,26 @@ export class ArticlesController {
   }
 
   @Patch(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateArticleDto) {
-    return this.articlesService.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateArticleDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.articlesService.update(id, dto, user);
   }
 
   @Patch(':id/publish')
-  publish(@Param('id', ParseUUIDPipe) id: string) {
-    return this.articlesService.setPublished(id, true);
+  publish(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.articlesService.setPublished(id, true, user);
   }
 
   @Patch(':id/unpublish')
-  unpublish(@Param('id', ParseUUIDPipe) id: string) {
-    return this.articlesService.setPublished(id, false);
+  unpublish(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.articlesService.setPublished(id, false, user);
   }
 
   @Delete(':id')
   remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.articlesService.remove(id, user.id);
+    return this.articlesService.remove(id, user);
   }
 }
