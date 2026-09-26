@@ -4,9 +4,13 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: npm ci && npm run build
-    startCommand: npm run start:prod
-    preDeployCommand: npm run db:migrate
+    # --include=dev: Render sets NODE_ENV=production, which makes plain `npm ci`
+    # skip devDependencies — but @nestjs/cli (nest build) and sequelize-cli
+    # (migrations, run from startCommand) are both devDependencies.
+    buildCommand: npm ci --include=dev && npm run build
+    # Free tier has no preDeployCommand, so migrations run here instead —
+    # safe on every start since Sequelize skips migrations it already applied.
+    startCommand: npm run db:migrate && npm run start:prod
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
