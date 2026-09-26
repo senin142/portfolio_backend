@@ -8,9 +8,12 @@ services:
     # skip devDependencies — but @nestjs/cli (nest build) and sequelize-cli
     # (migrations, run from startCommand) are both devDependencies.
     buildCommand: npm ci --include=dev && npm run build
-    # Free tier has no preDeployCommand, so migrations run here instead —
-    # safe on every start since Sequelize skips migrations it already applied.
-    startCommand: npm run db:migrate && npm run start:prod
+    # No migrations here: the deployed app connects as the scoped cms_app role
+    # (SELECT/INSERT/UPDATE/DELETE on its 4 tables only, no CREATE), and the
+    # superuser creds sequelize-cli would need are deliberately kept out of every
+    # deployed environment — see backend/.env. Run `npm run db:migrate` locally
+    # with DB_SUPERUSER_* set instead, before deploying a change that adds one.
+    startCommand: npm run start:prod
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
