@@ -6,6 +6,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import configuration from './config/configuration';
 import { DatabaseModule } from './database/database.module';
+import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ArticlesModule } from './articles/articles.module';
@@ -27,6 +28,7 @@ import { AuditModule } from './audit/audit.module';
     // dev server, so it fires on whatever schedule the app happens to be
     // running through, not necessarily exactly 3am every day.
     ScheduleModule.forRoot(),
+    HealthModule,
     DatabaseModule,
     AuthModule,
     UsersModule,

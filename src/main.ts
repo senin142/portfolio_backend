@@ -39,7 +39,9 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = config.get<number>('port') || 3001;
-  await app.listen(port);
+  // Explicit host: Render (and most PaaS free tiers) route to the container
+  // over its internal network interface, not just loopback.
+  await app.listen(port, '0.0.0.0');
   // eslint-disable-next-line no-console
   console.log(`API running on http://localhost:${port}, docs at /api/docs`);
 }
